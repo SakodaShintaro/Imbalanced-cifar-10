@@ -10,5 +10,5 @@ class AutoEncoder(torch.nn.Module):
         x = self.linear0(x)
         x = torch.nn.functional.relu(x)
         x = self.linear1(x)
-        x = torch.nn.functional.sigmoid(x)
+        x = torch.sigmoid(x)
         return x
