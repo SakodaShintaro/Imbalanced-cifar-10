@@ -41,12 +41,10 @@ class Dataset(torch.utils.data.Dataset):
         data = self.data[index]
         target = self.targets[index]
 
-        img = Image.fromarray(data)
-
         if self.transform is not None:
-            img = self.transform(img)
+            data = self.transform(data)
 
-        return img, target
+        return data, target
 
     def __len__(self):
         return len(self.data)
