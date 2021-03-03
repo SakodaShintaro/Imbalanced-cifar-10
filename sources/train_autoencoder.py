@@ -3,6 +3,7 @@
 import torch
 import torchvision
 import argparse
+import time
 from PIL import Image
 from model import AutoEncoder
 from dataset import Dataset
@@ -38,6 +39,7 @@ def main():
 
     optim = torch.optim.SGD(auto_encoder.parameters(), lr=20.0)
 
+    start = time.time()
     for epoch in range(10):
         # train
         auto_encoder.train()
@@ -47,7 +49,8 @@ def main():
             optim.zero_grad()
             out = auto_encoder.forward(x)
             loss = torch.nn.functional.mse_loss(out, x)
-            loss_str = f"{epoch + 1}\t{step + 1}\t{loss:.4f}"
+            elapsed = time.time() - start
+            loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{step + 1}\t{loss:.4f}"
             print(loss_str, end="\r")
             loss.backward()
             optim.step()
@@ -61,12 +64,16 @@ def main():
                 x, y = minibatch
                 x = x.flatten(1)
                 out = auto_encoder.forward(x)
-                loss = torch.nn.functional.mse_loss(out, x)
-                validation_loss += loss
+                loss = torch.nn.functional.mse_loss(out, x, reduction="mean")
+                validation_loss += loss * x.shape[0]
                 data_num += x.shape[0]
             validation_loss /= data_num
-        loss_str = f"{epoch + 1}\t{validation_loss:.4f}"
+        elapsed = time.time() - start
+        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{validation_loss:.4f}          "
         print(loss_str)
+
+    # save model
+    torch.save(auto_encoder, "../result/model/autoencoder.pt")
 
     # show reconstruction
     result_image_dir = "../result/image/"
