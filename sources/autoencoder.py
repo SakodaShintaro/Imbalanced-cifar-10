@@ -13,3 +13,8 @@ class AutoEncoder(torch.nn.Module):
         x = self.linear1(x)
         x = torch.tanh(x)
         return x
+
+    def get_embed(self, x):
+        x = self.linear0(x)
+        x = torch.nn.functional.relu(x)
+        return x
