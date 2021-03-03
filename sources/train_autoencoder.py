@@ -39,13 +39,14 @@ def main():
     optim = torch.optim.SGD(auto_encoder.parameters(), lr=20.0)
 
     for epoch in range(10):
-        for minibatch in trainloader:
+        for step, minibatch in enumerate(trainloader):
             x, y = minibatch
             x = x.flatten(1)
             optim.zero_grad()
             out = auto_encoder.forward(x)
             loss = torch.nn.functional.mse_loss(out, x)
-            print(loss.item())
+            loss_str = f"{epoch + 1}\t{step + 1}\t{loss}"
+            print(loss_str, end="\r")
             loss.backward()
             optim.step()
 
