@@ -5,7 +5,7 @@ import torchvision
 import argparse
 import time
 from PIL import Image
-from model import AutoEncoder
+from autoencoder import AutoEncoder
 from dataset import Dataset
 
 
