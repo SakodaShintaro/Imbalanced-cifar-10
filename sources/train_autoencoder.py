@@ -39,17 +39,36 @@ def main():
     optim = torch.optim.SGD(auto_encoder.parameters(), lr=20.0)
 
     for epoch in range(10):
+        # train
+        auto_encoder.train()
         for step, minibatch in enumerate(trainloader):
             x, y = minibatch
             x = x.flatten(1)
             optim.zero_grad()
             out = auto_encoder.forward(x)
             loss = torch.nn.functional.mse_loss(out, x)
-            loss_str = f"{epoch + 1}\t{step + 1}\t{loss}"
+            loss_str = f"{epoch + 1}\t{step + 1}\t{loss:.4f}"
             print(loss_str, end="\r")
             loss.backward()
             optim.step()
 
+        # validation
+        with torch.no_grad():
+            validation_loss = 0
+            data_num = 0
+            auto_encoder.eval()
+            for minibatch in testloader:
+                x, y = minibatch
+                x = x.flatten(1)
+                out = auto_encoder.forward(x)
+                loss = torch.nn.functional.mse_loss(out, x)
+                validation_loss += loss
+                data_num += x.shape[0]
+            validation_loss /= data_num
+        loss_str = f"{epoch + 1}\t{validation_loss:.4f}"
+        print(loss_str)
+
+    # show reconstruction
     result_image_dir = "../result/image/"
     with torch.no_grad():
         auto_encoder.eval()
@@ -58,14 +77,11 @@ def main():
             x = x.flatten(1)
             out = auto_encoder.forward(x)
 
-            print(out.max(), out.min())
-
             x = (x + 1) / 2 * 256
             x = x.to(torch.uint8)
 
             out = (out + 1) / 2 * 256
             out = out.to(torch.uint8)
-            print(out.shape)
 
             for i in range(args.batch_size):
                 origin = x[i].reshape([image_channel, image_size, image_size])
