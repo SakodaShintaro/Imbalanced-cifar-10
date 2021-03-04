@@ -1,12 +1,13 @@
 import torch
+import torch.nn as nn
 
 
-class Model(torch.nn.Module):
-    def __init__(self, input_size, hidden_size, class_num, freeze_encoder=False):
-        super(Model, self).__init__()
-        self.linear0 = torch.nn.Linear(input_size, hidden_size)
+class LinearModel(torch.nn.Module):
+    def __init__(self, input_size, input_channel_num, hidden_size, class_num, freeze_encoder=False):
+        super(LinearModel, self).__init__()
+        self.linear0 = torch.nn.Linear(input_size * input_size * input_channel_num, hidden_size)
         self.linear1 = torch.nn.Linear(hidden_size, hidden_size)
-        self.linear_reconstruct = torch.nn.Linear(hidden_size, input_size)
+        self.linear_reconstruct = torch.nn.Linear(hidden_size, input_size * input_size * input_channel_num)
         self.linear_classifier = torch.nn.Linear(hidden_size, class_num)
         self.freeze_encoder = freeze_encoder
 
@@ -29,5 +30,46 @@ class Model(torch.nn.Module):
 
         # classifier
         c = self.linear_classifier(x)
+
+        return r, c
+
+
+class CNNModel(nn.Module):
+    def __init__(self, input_size, input_channel_num, hidden_size, class_num, freeze_encoder=False):
+        super(CNNModel, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=input_channel_num, out_channels=16, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=4, kernel_size=3, padding=1)
+
+        self.t_conv1 = nn.ConvTranspose2d(in_channels=4, out_channels=16, kernel_size=2, stride=2)
+        self.t_conv2 = nn.ConvTranspose2d(in_channels=16, out_channels=3, kernel_size=2, stride=2)
+
+        self.conv_classifier = nn.Conv2d(in_channels=4, out_channels=4, kernel_size=1, padding=0)
+        self.linear_classifier = torch.nn.Linear(4 * input_size // 4 * input_size // 4, class_num)
+        self.freeze_encoder = freeze_encoder
+        self.pool = nn.MaxPool2d(2, 2)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = torch.nn.functional.relu(x)
+        x = self.pool(x)
+        x = self.conv2(x)
+        x = torch.nn.functional.relu(x)
+        x = self.pool(x)
+
+        # representation
+        if self.freeze_encoder:
+            x = x.detach()
+
+        # reconstruct
+        r = self.t_conv1(x)
+        r = torch.nn.functional.relu(r)
+        r = self.t_conv2(r)
+        r = torch.tanh(r)
+
+        # classifier
+        c = self.conv_classifier(x)
+        c = torch.nn.functional.relu(c)
+        c = torch.flatten(c, 1)
+        c = self.linear_classifier(c)
 
         return r, c

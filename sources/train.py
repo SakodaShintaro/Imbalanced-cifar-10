@@ -5,7 +5,7 @@ import torchvision
 import argparse
 import time
 from PIL import Image
-from model import Model
+from model import LinearModel, CNNModel
 from dataset import Dataset
 
 
@@ -37,7 +37,7 @@ def main():
     image_channel = 3
     class_num = 10
 
-    model = Model(image_size * image_size * image_channel, args.hidden_size, class_num)
+    model = CNNModel(image_size, image_channel, args.hidden_size, class_num)
     if args.saved_model_path is not None:
         model.load_state_dict(torch.load(args.saved_model_path))
 
