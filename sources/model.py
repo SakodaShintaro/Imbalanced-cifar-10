@@ -77,7 +77,7 @@ class ResidualBlock(nn.Module):
 class CNNModel(nn.Module):
     def __init__(self, input_size, input_channel_num, hidden_size, class_num, freeze_encoder=False):
         super(CNNModel, self).__init__()
-        down_channel_num = [64, 32]
+        down_channel_num = [128, 128]
         self.conv1 = Conv2DwithBatchNorm(in_channels=input_channel_num, out_channels=down_channel_num[0], kernel_size=3)
         self.conv2 = Conv2DwithBatchNorm(in_channels=down_channel_num[0], out_channels=down_channel_num[1], kernel_size=3)
 

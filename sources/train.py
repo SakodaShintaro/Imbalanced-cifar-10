@@ -12,7 +12,7 @@ from dataset import Dataset
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hidden_size", type=int, default=2048)
-    parser.add_argument("--epoch", type=int, default=10)
+    parser.add_argument("--epoch", type=int, default=20)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--saved_model_path", type=str, default=None)
     parser.add_argument("--learning_rate", type=float, default=0.01)
@@ -46,6 +46,7 @@ def main():
     model.to(device)
 
     optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
+    shceduler = torch.optim.lr_scheduler.MultiStepLR(optim, [args.epoch // 2, args.epoch * 3 // 4], gamma=0.1)
 
     start = time.time()
     for epoch in range(args.epoch):
@@ -96,6 +97,8 @@ def main():
         elapsed = time.time() - start
         loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{validation_loss_sum:.4f}\t{validation_loss_mse:.4f}\t{validation_loss_ce:.4f}\t{validation_accuracy * 100:.1f}           "
         print(loss_str)
+
+        shceduler.step()
 
     # save model
     torch.save(model.state_dict(), "../result/model/model.pt")
