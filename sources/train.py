@@ -41,7 +41,7 @@ def main():
     if args.saved_model_path is not None:
         model.load_state_dict(torch.load(args.saved_model_path))
 
-    optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate)
+    optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
 
     start = time.time()
     for epoch in range(args.epoch):
@@ -52,20 +52,22 @@ def main():
             reconstruct, classify = model.forward(x)
             loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
             loss_ce = torch.nn.functional.cross_entropy(classify, y)
+            loss_sum = args.coefficient_of_mse * loss_mse + args.coefficient_of_ce * loss_ce
             _, predicted = torch.max(classify, 1)
             accuracy = (predicted == y).sum().item() / x.shape[0]
             elapsed = time.time() - start
-            loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{step + 1}\t{loss_mse:.4f}\t{loss_ce:.4f}\t{accuracy * 100:.1f}"
+            loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{step + 1}\t{loss_sum:.4f}\t{loss_mse:.4f}\t{loss_ce:.4f}\t{accuracy * 100:.1f}"
             print(loss_str, end="\r")
 
             optim.zero_grad()
-            (loss_mse + loss_ce).backward()
+            loss_sum.backward()
             optim.step()
 
         # validation
         with torch.no_grad():
             validation_loss_mse = 0
             validation_loss_ce = 0
+            validation_loss_sum = 0
             validation_accuracy = 0
             data_num = 0
             model.eval()
@@ -74,16 +76,19 @@ def main():
                 reconstruct, classify = model.forward(x)
                 loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
                 loss_ce = torch.nn.functional.cross_entropy(classify, y)
+                loss_sum = args.coefficient_of_mse * loss_mse + args.coefficient_of_ce * loss_ce
                 validation_loss_mse += loss_mse * x.shape[0]
                 validation_loss_ce += loss_ce * x.shape[0]
+                validation_loss_sum += loss_sum * x.shape[0]
                 _, predicted = torch.max(classify, 1)
                 validation_accuracy += (predicted == y).sum().item()
                 data_num += x.shape[0]
             validation_loss_mse /= data_num
             validation_loss_ce /= data_num
+            validation_loss_sum /= data_num
             validation_accuracy /= data_num
         elapsed = time.time() - start
-        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{validation_loss_mse:.4f}\t{validation_loss_ce:.4f}\t{validation_accuracy * 100:.1f}           "
+        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{validation_loss_sum:.4f}\t{validation_loss_mse:.4f}\t{validation_loss_ce:.4f}\t{validation_accuracy * 100:.1f}           "
         print(loss_str)
 
     # save model
