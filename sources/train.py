@@ -5,7 +5,7 @@ import torchvision
 import argparse
 import time
 from PIL import Image
-from autoencoder import AutoEncoder
+from model import Model
 from dataset import Dataset
 
 
@@ -13,6 +13,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hidden_size", type=int, default=2048)
     parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--saved_model_path", type=str, default=None)
+    parser.add_argument("--learning_rate", type=float, default=0.01)
+    parser.add_argument(
+        "--data_num_of_imbalanced_class",
+        type=int,
+        default=2500)
+    parser.add_argument("--coefficient_of_mse", type=float, default=1)
+    parser.add_argument("--coefficient_of_ce", type=float, default=1)
     args = parser.parse_args()
 
     transform = torchvision.transforms.Compose(
@@ -21,8 +29,10 @@ def main():
 
     root_dir = "../data"
 
-    trainset = Dataset(root=root_dir, transform=transform,
-                       data_num_of_imbalanced_class=2500)
+    trainset = Dataset(
+        root=root_dir,
+        transform=transform,
+        data_num_of_imbalanced_class=args.data_num_of_imbalanced_class)
     trainloader = torch.utils.data.DataLoader(
         trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
@@ -33,56 +43,68 @@ def main():
 
     image_size = 32
     image_channel = 3
+    class_num = 10
 
-    auto_encoder = AutoEncoder(
-        image_size * image_size * image_channel, args.hidden_size)
+    model = torch.load(
+        args.saved_model_path) if args.saved_model_path is not None else Model(
+        image_size *
+        image_size *
+        image_channel,
+        args.hidden_size,
+        class_num)
 
-    optim = torch.optim.SGD(auto_encoder.parameters(), lr=20.0)
+    optim = torch.optim.SGD(
+        model.parameters(),
+        lr=args.learning_rate)
 
     start = time.time()
     for epoch in range(10):
         # train
-        auto_encoder.train()
+        model.train()
         for step, minibatch in enumerate(trainloader):
             x, y = minibatch
-            x = x.flatten(1)
-            optim.zero_grad()
-            out = auto_encoder.forward(x)
-            loss = torch.nn.functional.mse_loss(out, x)
+            reconstruct, classify = model.forward(x)
+            loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
+            loss_ce = torch.nn.functional.cross_entropy(classify, y)
+
             elapsed = time.time() - start
-            loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{step + 1}\t{loss:.4f}"
+            loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{step + 1}\t{loss_mse:.4f}\t{loss_ce:.4f}"
             print(loss_str, end="\r")
-            loss.backward()
+
+            optim.zero_grad()
+            (loss_mse + loss_ce).backward()
             optim.step()
 
         # validation
         with torch.no_grad():
-            validation_loss = 0
+            validation_loss_mse = 0
+            validation_loss_ce = 0
             data_num = 0
-            auto_encoder.eval()
+            model.eval()
             for minibatch in testloader:
                 x, y = minibatch
-                x = x.flatten(1)
-                out = auto_encoder.forward(x)
-                loss = torch.nn.functional.mse_loss(out, x, reduction="mean")
-                validation_loss += loss * x.shape[0]
+                reconstruct, classify = model.forward(x)
+                loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
+                loss_ce = torch.nn.functional.cross_entropy(classify, y)
+                validation_loss_mse += loss_mse * x.shape[0]
+                validation_loss_ce += loss_ce * x.shape[0]
                 data_num += x.shape[0]
-            validation_loss /= data_num
+            validation_loss_mse /= data_num
+            validation_loss_ce /= data_num
         elapsed = time.time() - start
-        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{validation_loss:.4f}          "
+        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{validation_loss_mse:.4f}\t{validation_loss_ce:.4f}          "
         print(loss_str)
 
     # save model
-    torch.save(auto_encoder, "../result/model/autoencoder.pt")
+    torch.save(model, "../result/model/model.pt")
 
     # show reconstruction
     result_image_dir = "../result/image/"
     with torch.no_grad():
-        auto_encoder.eval()
+        model.eval()
         for minibatch in testloader:
             x, y = minibatch
-            x = x.flatten(1)
-            out = auto_encoder.forward(x)
+            out, _ = model.forward(x)
 
             x = (x + 1) / 2 * 256
             x = x.to(torch.uint8)
