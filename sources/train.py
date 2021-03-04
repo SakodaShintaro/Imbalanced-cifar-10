@@ -12,6 +12,7 @@ from dataset import Dataset
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hidden_size", type=int, default=2048)
+    parser.add_argument("--epoch", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--saved_model_path", type=str, default=None)
     parser.add_argument("--learning_rate", type=float, default=0.01)
@@ -43,7 +44,7 @@ def main():
     optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate)
 
     start = time.time()
-    for epoch in range(10):
+    for epoch in range(args.epoch):
         # train
         model.train()
         for step, minibatch in enumerate(trainloader):
