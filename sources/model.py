@@ -16,6 +16,7 @@ class Model(torch.nn.Module):
         self.freeze_encoder = freeze_encoder
 
     def forward(self, x):
+        x_shape = x.shape
         x = x.flatten(1)
         x = self.linear0(x)
         x = torch.nn.functional.relu(x)
@@ -29,6 +30,7 @@ class Model(torch.nn.Module):
         # reconstruct
         r = self.linear_reconstruct(x)
         r = torch.tanh(r)
+        r = r.view(x_shape)
 
         # classifier
         c = self.linear_classifier(x)

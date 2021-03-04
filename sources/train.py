@@ -66,9 +66,10 @@ def main():
             reconstruct, classify = model.forward(x)
             loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
             loss_ce = torch.nn.functional.cross_entropy(classify, y)
-
+            _, predicted = torch.max(classify, 1)
+            accuracy = (predicted == y).sum().item() / x.shape[0]
             elapsed = time.time() - start
-            loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{step + 1}\t{loss_mse:.4f}\t{loss_ce:.4f}"
+            loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{step + 1}\t{loss_mse:.4f}\t{loss_ce:.4f}\t{accuracy * 100:.1f}"
             print(loss_str, end="\r")
 
             optim.zero_grad()
@@ -79,6 +80,7 @@ def main():
         with torch.no_grad():
             validation_loss_mse = 0
             validation_loss_ce = 0
+            validation_accuracy = 0
             data_num = 0
             model.eval()
             for minibatch in testloader:
@@ -88,11 +90,14 @@ def main():
                 loss_ce = torch.nn.functional.cross_entropy(classify, y)
                 validation_loss_mse += loss_mse * x.shape[0]
                 validation_loss_ce += loss_ce * x.shape[0]
+                _, predicted = torch.max(classify, 1)
+                validation_accuracy += (predicted == y).sum().item()
                 data_num += x.shape[0]
             validation_loss_mse /= data_num
             validation_loss_ce /= data_num
+            validation_accuracy /= data_num
         elapsed = time.time() - start
-        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{validation_loss_mse:.4f}\t{validation_loss_ce:.4f}          "
+        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{validation_loss_mse:.4f}\t{validation_loss_ce:.4f}\t{validation_accuracy * 100:.1f}           "
         print(loss_str)
 
     # save model
