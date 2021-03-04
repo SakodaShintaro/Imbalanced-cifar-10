@@ -37,14 +37,16 @@ class LinearModel(torch.nn.Module):
 class CNNModel(nn.Module):
     def __init__(self, input_size, input_channel_num, hidden_size, class_num, freeze_encoder=False):
         super(CNNModel, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=input_channel_num, out_channels=16, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=16, out_channels=4, kernel_size=3, padding=1)
+        down_channel_num = [32, 16]
+        self.conv1 = nn.Conv2d(in_channels=input_channel_num, out_channels=down_channel_num[0], kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=down_channel_num[0], out_channels=down_channel_num[1], kernel_size=3, padding=1)
 
-        self.t_conv1 = nn.ConvTranspose2d(in_channels=4, out_channels=16, kernel_size=2, stride=2)
-        self.t_conv2 = nn.ConvTranspose2d(in_channels=16, out_channels=3, kernel_size=2, stride=2)
+        self.t_conv1 = nn.ConvTranspose2d(in_channels=down_channel_num[1], out_channels=down_channel_num[0], kernel_size=2, stride=2)
+        self.t_conv2 = nn.ConvTranspose2d(in_channels=down_channel_num[0], out_channels=input_channel_num, kernel_size=2, stride=2)
 
-        self.conv_classifier = nn.Conv2d(in_channels=4, out_channels=4, kernel_size=1, padding=0)
-        self.linear_classifier = torch.nn.Linear(4 * input_size // 4 * input_size // 4, class_num)
+        self.conv_classifier = nn.Conv2d(in_channels=down_channel_num[1], out_channels=down_channel_num[1], kernel_size=1, padding=0)
+        representation_size = input_size // (len(down_channel_num) * 2)
+        self.linear_classifier = torch.nn.Linear(down_channel_num[1] * representation_size * representation_size, class_num)
         self.freeze_encoder = freeze_encoder
         self.pool = nn.MaxPool2d(2, 2)
 
