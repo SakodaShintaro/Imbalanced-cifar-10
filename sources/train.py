@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--data_num_of_imbalanced_class", type=int, default=2500)
     parser.add_argument("--coefficient_of_mse", type=float, default=1)
     parser.add_argument("--coefficient_of_ce", type=float, default=1)
+    parser.add_argument("--gpu", action="store_true")
     args = parser.parse_args()
 
     transform = torchvision.transforms.Compose(
@@ -41,6 +42,9 @@ def main():
     if args.saved_model_path is not None:
         model.load_state_dict(torch.load(args.saved_model_path))
 
+    device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
+    model.to(device)
+
     optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
 
     start = time.time()
@@ -49,6 +53,7 @@ def main():
         model.train()
         for step, minibatch in enumerate(trainloader):
             x, y = minibatch
+            x, y = x.to(device), y.to(device)
             reconstruct, classify = model.forward(x)
             loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
             loss_ce = torch.nn.functional.cross_entropy(classify, y)
@@ -73,6 +78,7 @@ def main():
             model.eval()
             for minibatch in testloader:
                 x, y = minibatch
+                x, y = x.to(device), y.to(device)
                 reconstruct, classify = model.forward(x)
                 loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
                 loss_ce = torch.nn.functional.cross_entropy(classify, y)
@@ -100,6 +106,7 @@ def main():
         model.eval()
         for minibatch in testloader:
             x, y = minibatch
+            x, y = x.to(device), y.to(device)
             out, _ = model.forward(x)
 
             x = (x + 1) / 2 * 256
@@ -111,11 +118,11 @@ def main():
             for i in range(args.batch_size):
                 origin = x[i].reshape([image_channel, image_size, image_size])
                 origin = origin.permute([1, 2, 0])
-                origin = origin.numpy()
+                origin = origin.cpu().numpy()
 
                 pred = out[i].reshape([image_channel, image_size, image_size])
                 pred = pred.permute([1, 2, 0])
-                pred = pred.numpy()
+                pred = pred.cpu().numpy()
 
                 pil_img0 = Image.fromarray(origin)
                 pil_img0.save(f"{result_image_dir}/{i}-0.png")
