@@ -2,12 +2,7 @@ import torch
 
 
 class Model(torch.nn.Module):
-    def __init__(
-            self,
-            input_size,
-            hidden_size,
-            class_num,
-            freeze_encoder=False):
+    def __init__(self, input_size, hidden_size, class_num, freeze_encoder=False):
         super(Model, self).__init__()
         self.linear0 = torch.nn.Linear(input_size, hidden_size)
         self.linear1 = torch.nn.Linear(hidden_size, hidden_size)

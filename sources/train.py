@@ -15,10 +15,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--saved_model_path", type=str, default=None)
     parser.add_argument("--learning_rate", type=float, default=0.01)
-    parser.add_argument(
-        "--data_num_of_imbalanced_class",
-        type=int,
-        default=2500)
+    parser.add_argument("--data_num_of_imbalanced_class", type=int, default=2500)
     parser.add_argument("--coefficient_of_mse", type=float, default=1)
     parser.add_argument("--coefficient_of_ce", type=float, default=1)
     args = parser.parse_args()
@@ -29,33 +26,21 @@ def main():
 
     root_dir = "../data"
 
-    trainset = Dataset(
-        root=root_dir,
-        transform=transform,
-        data_num_of_imbalanced_class=args.data_num_of_imbalanced_class)
-    trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    trainset = Dataset(root=root_dir, transform=transform, data_num_of_imbalanced_class=args.data_num_of_imbalanced_class)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
-    testset = torchvision.datasets.CIFAR10(root=root_dir, train=False,
-                                           download=True, transform=transform)
-    testloader = torch.utils.data.DataLoader(
-        testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
+    testset = torchvision.datasets.CIFAR10(root=root_dir, train=False, download=True, transform=transform)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
 
     image_size = 32
     image_channel = 3
     class_num = 10
 
-    model = torch.load(
-        args.saved_model_path) if args.saved_model_path is not None else Model(
-        image_size *
-        image_size *
-        image_channel,
-        args.hidden_size,
-        class_num)
+    model = Model(image_size * image_size * image_channel, args.hidden_size, class_num)
+    if args.saved_model_path is not None:
+        model.load_state_dict(torch.load(args.saved_model_path))
 
-    optim = torch.optim.SGD(
-        model.parameters(),
-        lr=args.learning_rate)
+    optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate)
 
     start = time.time()
     for epoch in range(10):
@@ -101,7 +86,7 @@ def main():
         print(loss_str)
 
     # save model
-    torch.save(model, "../result/model/model.pt")
+    torch.save(model.state_dict(), "../result/model/model.pt")
 
     # show reconstruction
     result_image_dir = "../result/image/"
