@@ -4,6 +4,8 @@ import torch
 import torchvision
 import argparse
 import time
+import pandas as pd
+import matplotlib.pyplot as plt
 from PIL import Image
 from model import LinearModel, CNNModel
 from dataset import Dataset
@@ -48,6 +50,8 @@ def main():
     optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
     shceduler = torch.optim.lr_scheduler.MultiStepLR(optim, [args.epoch // 2, args.epoch * 3 // 4], gamma=0.1)
 
+    valid_df = pd.DataFrame(columns=['time(seconds)', 'epoch', 'sum', 'reconstruct_mse', 'cross_entropy', 'accuracy'])
+
     start = time.time()
     for epoch in range(args.epoch):
         # train
@@ -84,9 +88,9 @@ def main():
                 loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
                 loss_ce = torch.nn.functional.cross_entropy(classify, y)
                 loss_sum = args.coefficient_of_mse * loss_mse + args.coefficient_of_ce * loss_ce
-                validation_loss_mse += loss_mse * x.shape[0]
-                validation_loss_ce += loss_ce * x.shape[0]
-                validation_loss_sum += loss_sum * x.shape[0]
+                validation_loss_mse += loss_mse.item() * x.shape[0]
+                validation_loss_ce += loss_ce.item() * x.shape[0]
+                validation_loss_sum += loss_sum.item() * x.shape[0]
                 _, predicted = torch.max(classify, 1)
                 validation_accuracy += (predicted == y).sum().item()
                 data_num += x.shape[0]
@@ -95,6 +99,9 @@ def main():
             validation_loss_sum /= data_num
             validation_accuracy /= data_num
         elapsed = time.time() - start
+        s = pd.Series([elapsed, int(epoch + 1), validation_loss_sum, validation_loss_mse,
+                       validation_loss_ce, validation_accuracy], index=valid_df.columns)
+        valid_df = valid_df.append(s, ignore_index=True)
         loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{validation_loss_sum:.4f}\t{validation_loss_mse:.4f}\t{validation_loss_ce:.4f}\t{validation_accuracy * 100:.1f}           "
         print(loss_str)
 
@@ -102,6 +109,13 @@ def main():
 
     # save model
     torch.save(model.state_dict(), "../result/model/model.pt")
+
+    # save validation loss
+    valid_df.to_csv("../result/loss_log/validation_loss.tsv", sep="\t")
+
+    # plot validation loss
+    valid_df.plot(x="epoch", y=['sum', 'reconstruct_mse', 'cross_entropy', 'accuracy'], subplots=True, layout=(2, 2), marker=".", figsize=(16, 9))
+    plt.savefig('../result/loss_log/validation_loss.png', bbox_inches="tight", pad_inches=0.01)
 
     # show reconstruction
     result_image_dir = "../result/image/"
