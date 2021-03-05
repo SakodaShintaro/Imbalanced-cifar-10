@@ -12,11 +12,9 @@ class Dataset(torch.utils.data.Dataset):
 
         self.transform = transform
 
-        # 削除
+        # erase data
         class_names = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
-        class_to_label = dict()
-        for i, name in enumerate(class_names):
-            class_to_label[name] = i
+        class_to_label = {name: i for i, name in enumerate(class_names)}
 
         imbalanced_class_labels = [class_to_label[name] for name in ["bird", "deer", "truck"]]
 
