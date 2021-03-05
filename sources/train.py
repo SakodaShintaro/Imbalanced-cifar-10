@@ -13,10 +13,10 @@ from dataset import Dataset
 
 def calc_loss(model, data_loader, device, args):
     with torch.no_grad():
-        validation_loss_mse = 0
-        validation_loss_ce = 0
-        validation_loss_sum = 0
-        validation_accuracy = 0
+        loss_mse = 0
+        loss_ce = 0
+        loss_sum = 0
+        accuracy = 0
         data_num = 0
         model.eval()
         for minibatch in data_loader:
@@ -26,17 +26,17 @@ def calc_loss(model, data_loader, device, args):
             loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
             loss_ce = torch.nn.functional.cross_entropy(classify, y)
             loss_sum = args.coefficient_of_mse * loss_mse + args.coefficient_of_ce * loss_ce
-            validation_loss_mse += loss_mse.item() * x.shape[0]
-            validation_loss_ce += loss_ce.item() * x.shape[0]
-            validation_loss_sum += loss_sum.item() * x.shape[0]
+            loss_mse += loss_mse.item() * x.shape[0]
+            loss_ce += loss_ce.item() * x.shape[0]
+            loss_sum += loss_sum.item() * x.shape[0]
             _, predicted = torch.max(classify, 1)
-            validation_accuracy += (predicted == y).sum().item()
+            accuracy += (predicted == y).sum().item()
             data_num += x.shape[0]
-        validation_loss_mse /= data_num
-        validation_loss_ce /= data_num
-        validation_loss_sum /= data_num
-        validation_accuracy /= data_num
-    return validation_loss_sum, validation_loss_mse, validation_loss_ce, validation_accuracy
+        loss_mse /= data_num
+        loss_ce /= data_num
+        loss_sum /= data_num
+        accuracy /= data_num
+    return loss_sum, loss_mse, loss_ce, accuracy
 
 
 def main():
@@ -52,38 +52,37 @@ def main():
     parser.add_argument("--gpu", action="store_true")
     args = parser.parse_args()
 
+    # prepare data_loader
     transform = torchvision.transforms.Compose(
         [torchvision.transforms.ToTensor(),
          torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-
-    root_dir = "../data"
-
-    trainset = Dataset(root=root_dir, transform=transform, data_num_of_imbalanced_class=args.data_num_of_imbalanced_class)
-
+    data_dir = "../data"
+    trainset = Dataset(root=data_dir, transform=transform, data_num_of_imbalanced_class=args.data_num_of_imbalanced_class)
     train_size = int(len(trainset) * 0.9)
     valid_size = len(trainset) - train_size
     trainset, validset = torch.utils.data.random_split(trainset, [train_size, valid_size])
-
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
     validloader = torch.utils.data.DataLoader(validset, batch_size=args.batch_size, shuffle=True, num_workers=2)
-
-    testset = torchvision.datasets.CIFAR10(root=root_dir, train=False, download=True, transform=transform)
+    testset = torchvision.datasets.CIFAR10(root=data_dir, train=False, download=True, transform=transform)
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
 
+    # define constants
     image_size = 32
     image_channel = 3
     class_num = 10
 
+    # model
     model = CNNModel(image_size, image_channel, args.hidden_size, class_num)
     if args.saved_model_path is not None:
         model.load_state_dict(torch.load(args.saved_model_path))
-
     device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
     model.to(device)
 
+    # optimizer
     optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
     shceduler = torch.optim.lr_scheduler.MultiStepLR(optim, [args.epoch // 2, args.epoch * 3 // 4], gamma=0.1)
 
+    # loss_log
     valid_df = pd.DataFrame(columns=['time(seconds)', 'epoch', 'sum', 'reconstruct_mse', 'cross_entropy', 'accuracy'])
 
     start = time.time()
