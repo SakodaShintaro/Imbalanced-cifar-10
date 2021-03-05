@@ -10,6 +10,11 @@ from PIL import Image
 from model import LinearModel, CNNModel
 from dataset import Dataset
 
+# define constants
+image_size = 32
+image_channel = 3
+class_num = 10
+
 
 def calc_loss(model, data_loader, device, args):
     with torch.no_grad():
@@ -18,6 +23,8 @@ def calc_loss(model, data_loader, device, args):
         loss_sum = 0
         accuracy = 0
         data_num = 0
+        accuracy_for_each_class = [0 for _ in range(class_num)]
+        data_num_for_each_class = [0 for _ in range(class_num)]
         model.eval()
         for minibatch in data_loader:
             x, y = minibatch
@@ -31,12 +38,19 @@ def calc_loss(model, data_loader, device, args):
             loss_sum += curr_loss_sum.item() * x.shape[0]
             _, predicted = torch.max(classify, 1)
             accuracy += (predicted == y).sum().item()
-            data_num += x.shape[0]
+
+            for i in range(x.shape[0]):
+                accuracy_for_each_class[y[i]] += (predicted[i] == y[i]).item()
+                data_num_for_each_class[y[i]] += 1
+
+        data_num = sum(data_num_for_each_class)
         loss_mse /= data_num
         loss_ce /= data_num
         loss_sum /= data_num
         accuracy /= data_num
-    return loss_sum, loss_mse, loss_ce, accuracy
+        for i in range(class_num):
+            accuracy_for_each_class[i] /= data_num_for_each_class[i]
+    return loss_sum, loss_mse, loss_ce, accuracy, accuracy_for_each_class
 
 
 def main():
@@ -73,11 +87,6 @@ def main():
     testset = torchvision.datasets.CIFAR10(root=data_dir, train=False, download=True, transform=transform_normal)
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
 
-    # define constants
-    image_size = 32
-    image_channel = 3
-    class_num = 10
-
     # model
     model = CNNModel(image_size, image_channel, args.hidden_size, class_num)
     if args.saved_model_path is not None:
@@ -90,7 +99,8 @@ def main():
     shceduler = torch.optim.lr_scheduler.MultiStepLR(optim, [args.epoch // 2, args.epoch * 3 // 4], gamma=0.1)
 
     # loss_log
-    valid_df = pd.DataFrame(columns=['time(seconds)', 'epoch', 'sum', 'reconstruct_mse', 'cross_entropy', 'accuracy'])
+    valid_df = pd.DataFrame(columns=['time(seconds)', 'epoch', 'sum', 'reconstruct_mse', 'cross_entropy',
+                                     'accuracy'] + [f'accuracy_of_class{i}' for i in range(class_num)])
 
     start = time.time()
     for epoch in range(args.epoch):
@@ -114,9 +124,10 @@ def main():
             optim.step()
 
         # validation
-        valid_loss_sum, valid_loss_mse, valid_loss_ce, valid_accuracy = calc_loss(model, validloader, device, args)
+        valid_loss_sum, valid_loss_mse, valid_loss_ce, valid_accuracy, valid_accuracy_for_each_class = calc_loss(model, validloader, device, args)
         elapsed = time.time() - start
-        s = pd.Series([elapsed, int(epoch + 1), valid_loss_sum, valid_loss_mse, valid_loss_ce, valid_accuracy], index=valid_df.columns)
+        s = pd.Series([elapsed, int(epoch + 1), valid_loss_sum, valid_loss_mse, valid_loss_ce,
+                       valid_accuracy] + valid_accuracy_for_each_class, index=valid_df.columns)
         valid_df = valid_df.append(s, ignore_index=True)
         loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{valid_loss_sum:.4f}\t{valid_loss_mse:.4f}\t{valid_loss_ce:.4f}\t{valid_accuracy * 100:.1f}           "
         print(loss_str)
@@ -131,13 +142,23 @@ def main():
 
     # plot validation loss
     valid_df.plot(x="epoch", y=['sum', 'reconstruct_mse', 'cross_entropy', 'accuracy'], subplots=True, layout=(2, 2), marker=".", figsize=(16, 9))
-    plt.savefig('../result/loss_log/validation_loss.png', bbox_inches="tight", pad_inches=0.01)
+    plt.savefig('../result/loss_log/validation_loss.png', bbox_inches="tight", pad_inches=0.05)
+    plt.clf()
+    valid_df.plot(x="epoch", y=[f'accuracy_of_class{i}' for i in range(class_num)], marker=".", figsize=(16, 9))
+    plt.savefig('../result/loss_log/accuracy_for_each_class.png', bbox_inches="tight", pad_inches=0.05)
 
     # save test loss
     with open("../result/loss_log/test_loss.txt", "w") as f:
-        test_loss_sum, test_loss_mse, test_loss_ce, test_accuracy = calc_loss(model, testloader, device, args)
-        f.write("loss_sum\tloss_mse\tloss_ce\taccuracy\n")
-        f.write(f"{test_loss_sum:.4f}\t{test_loss_mse:.4f}\t{test_loss_ce:.4f}\t{test_accuracy * 100:.1f}\n")
+        test_loss_sum, test_loss_mse, test_loss_ce, test_accuracy, test_accuracy_for_each_class = calc_loss(model, testloader, device, args)
+        f.write("loss_sum\tloss_mse\tloss_ce\taccuracy")
+        for i in range(class_num):
+            f.write(f"\taccuracy_of_class{i}")
+        f.write("\n")
+
+        f.write(f"{test_loss_sum:.4f}\t{test_loss_mse:.4f}\t{test_loss_ce:.4f}\t{test_accuracy * 100:.1f}")
+        for i in range(class_num):
+            f.write(f"\t{test_accuracy_for_each_class[i]}")
+        f.write("\n")
 
     # show reconstruction
     result_image_dir = "../result/image/"
