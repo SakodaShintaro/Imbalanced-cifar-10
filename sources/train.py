@@ -23,12 +23,12 @@ def calc_loss(model, data_loader, device, args):
             x, y = minibatch
             x, y = x.to(device), y.to(device)
             reconstruct, classify = model.forward(x)
-            loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
-            loss_ce = torch.nn.functional.cross_entropy(classify, y)
-            loss_sum = args.coefficient_of_mse * loss_mse + args.coefficient_of_ce * loss_ce
-            loss_mse += loss_mse.item() * x.shape[0]
-            loss_ce += loss_ce.item() * x.shape[0]
-            loss_sum += loss_sum.item() * x.shape[0]
+            curr_loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
+            curr_loss_ce = torch.nn.functional.cross_entropy(classify, y)
+            curr_loss_sum = args.coefficient_of_mse * curr_loss_mse + args.coefficient_of_ce * curr_loss_ce
+            loss_mse += curr_loss_mse.item() * x.shape[0]
+            loss_ce += curr_loss_ce.item() * x.shape[0]
+            loss_sum += curr_loss_sum.item() * x.shape[0]
             _, predicted = torch.max(classify, 1)
             accuracy += (predicted == y).sum().item()
             data_num += x.shape[0]
@@ -42,7 +42,7 @@ def calc_loss(model, data_loader, device, args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hidden_size", type=int, default=2048)
-    parser.add_argument("--epoch", type=int, default=20)
+    parser.add_argument("--epoch", type=int, default=40)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--saved_model_path", type=str, default=None)
     parser.add_argument("--learning_rate", type=float, default=0.01)
@@ -53,17 +53,24 @@ def main():
     args = parser.parse_args()
 
     # prepare data_loader
-    transform = torchvision.transforms.Compose(
+    transform_augment = torchvision.transforms.Compose(
+        [torchvision.transforms.ToTensor(),
+         torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+         torchvision.transforms.RandomHorizontalFlip(),
+         torchvision.transforms.RandomVerticalFlip(),
+         ])
+    transform_normal = torchvision.transforms.Compose(
         [torchvision.transforms.ToTensor(),
          torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     data_dir = "../data"
-    trainset = Dataset(root=data_dir, transform=transform, data_num_of_imbalanced_class=args.data_num_of_imbalanced_class)
+    trainset = Dataset(root=data_dir, transform=transform_augment, data_num_of_imbalanced_class=args.data_num_of_imbalanced_class)
     train_size = int(len(trainset) * 0.9)
     valid_size = len(trainset) - train_size
     trainset, validset = torch.utils.data.random_split(trainset, [train_size, valid_size])
+    validset.transform = transform_normal
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
     validloader = torch.utils.data.DataLoader(validset, batch_size=args.batch_size, shuffle=True, num_workers=2)
-    testset = torchvision.datasets.CIFAR10(root=data_dir, train=False, download=True, transform=transform)
+    testset = torchvision.datasets.CIFAR10(root=data_dir, train=False, download=True, transform=transform_normal)
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
 
     # define constants
