@@ -11,6 +11,34 @@ from model import LinearModel, CNNModel
 from dataset import Dataset
 
 
+def calc_loss(model, data_loader, device, args):
+    with torch.no_grad():
+        validation_loss_mse = 0
+        validation_loss_ce = 0
+        validation_loss_sum = 0
+        validation_accuracy = 0
+        data_num = 0
+        model.eval()
+        for minibatch in data_loader:
+            x, y = minibatch
+            x, y = x.to(device), y.to(device)
+            reconstruct, classify = model.forward(x)
+            loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
+            loss_ce = torch.nn.functional.cross_entropy(classify, y)
+            loss_sum = args.coefficient_of_mse * loss_mse + args.coefficient_of_ce * loss_ce
+            validation_loss_mse += loss_mse.item() * x.shape[0]
+            validation_loss_ce += loss_ce.item() * x.shape[0]
+            validation_loss_sum += loss_sum.item() * x.shape[0]
+            _, predicted = torch.max(classify, 1)
+            validation_accuracy += (predicted == y).sum().item()
+            data_num += x.shape[0]
+        validation_loss_mse /= data_num
+        validation_loss_ce /= data_num
+        validation_loss_sum /= data_num
+        validation_accuracy /= data_num
+    return validation_loss_sum, validation_loss_mse, validation_loss_ce, validation_accuracy
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hidden_size", type=int, default=2048)
@@ -31,7 +59,13 @@ def main():
     root_dir = "../data"
 
     trainset = Dataset(root=root_dir, transform=transform, data_num_of_imbalanced_class=args.data_num_of_imbalanced_class)
+
+    train_size = int(len(trainset) * 0.9)
+    valid_size = len(trainset) - train_size
+    trainset, validset = torch.utils.data.random_split(trainset, [train_size, valid_size])
+
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    validloader = torch.utils.data.DataLoader(validset, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
     testset = torchvision.datasets.CIFAR10(root=root_dir, train=False, download=True, transform=transform)
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
@@ -74,35 +108,11 @@ def main():
             optim.step()
 
         # validation
-        with torch.no_grad():
-            validation_loss_mse = 0
-            validation_loss_ce = 0
-            validation_loss_sum = 0
-            validation_accuracy = 0
-            data_num = 0
-            model.eval()
-            for minibatch in testloader:
-                x, y = minibatch
-                x, y = x.to(device), y.to(device)
-                reconstruct, classify = model.forward(x)
-                loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
-                loss_ce = torch.nn.functional.cross_entropy(classify, y)
-                loss_sum = args.coefficient_of_mse * loss_mse + args.coefficient_of_ce * loss_ce
-                validation_loss_mse += loss_mse.item() * x.shape[0]
-                validation_loss_ce += loss_ce.item() * x.shape[0]
-                validation_loss_sum += loss_sum.item() * x.shape[0]
-                _, predicted = torch.max(classify, 1)
-                validation_accuracy += (predicted == y).sum().item()
-                data_num += x.shape[0]
-            validation_loss_mse /= data_num
-            validation_loss_ce /= data_num
-            validation_loss_sum /= data_num
-            validation_accuracy /= data_num
+        valid_loss_sum, valid_loss_mse, valid_loss_ce, valid_accuracy = calc_loss(model, validloader, device, args)
         elapsed = time.time() - start
-        s = pd.Series([elapsed, int(epoch + 1), validation_loss_sum, validation_loss_mse,
-                       validation_loss_ce, validation_accuracy], index=valid_df.columns)
+        s = pd.Series([elapsed, int(epoch + 1), valid_loss_sum, valid_loss_mse, valid_loss_ce, valid_accuracy], index=valid_df.columns)
         valid_df = valid_df.append(s, ignore_index=True)
-        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{validation_loss_sum:.4f}\t{validation_loss_mse:.4f}\t{validation_loss_ce:.4f}\t{validation_accuracy * 100:.1f}           "
+        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{valid_loss_sum:.4f}\t{valid_loss_mse:.4f}\t{valid_loss_ce:.4f}\t{valid_accuracy * 100:.1f}           "
         print(loss_str)
 
         shceduler.step()
@@ -116,6 +126,12 @@ def main():
     # plot validation loss
     valid_df.plot(x="epoch", y=['sum', 'reconstruct_mse', 'cross_entropy', 'accuracy'], subplots=True, layout=(2, 2), marker=".", figsize=(16, 9))
     plt.savefig('../result/loss_log/validation_loss.png', bbox_inches="tight", pad_inches=0.01)
+
+    # save test loss
+    with open("../result/loss_log/test_loss.txt", "w") as f:
+        test_loss_sum, test_loss_mse, test_loss_ce, test_accuracy = calc_loss(model, testloader, device, args)
+        f.write("loss_sum\tloss_mse\tloss_ce\taccuracy\n")
+        f.write(f"{test_loss_sum:.4f}\t{test_loss_mse:.4f}\t{test_loss_ce:.4f}\t{test_accuracy * 100:.1f}\n")
 
     # show reconstruction
     result_image_dir = "../result/image/"
