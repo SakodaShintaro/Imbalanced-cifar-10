@@ -63,7 +63,6 @@ def main():
     parser.add_argument("--data_num_of_imbalanced_class", type=int, default=2500)
     parser.add_argument("--coefficient_of_mse", type=float, default=1)
     parser.add_argument("--coefficient_of_ce", type=float, default=1)
-    parser.add_argument("--gpu", action="store_true")
     args = parser.parse_args()
 
     # prepare data_loader
@@ -91,7 +90,7 @@ def main():
     model = CNNModel(image_size, image_channel, args.hidden_size, class_num)
     if args.saved_model_path is not None:
         model.load_state_dict(torch.load(args.saved_model_path))
-    device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     # optimizer
