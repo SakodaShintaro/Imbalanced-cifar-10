@@ -56,10 +56,10 @@ def calc_loss(model, data_loader, device, args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hidden_size", type=int, default=2048)
-    parser.add_argument("--epoch", type=int, default=40)
+    parser.add_argument("--epoch", type=int, default=200)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--saved_model_path", type=str, default=None)
-    parser.add_argument("--learning_rate", type=float, default=0.01)
+    parser.add_argument("--learning_rate", type=float, default=0.1)
     parser.add_argument("--data_num_of_imbalanced_class", type=int, default=2500)
     parser.add_argument("--coefficient_of_mse", type=float, default=1)
     parser.add_argument("--coefficient_of_ce", type=float, default=1)
@@ -95,8 +95,9 @@ def main():
     model.to(device)
 
     # optimizer
-    optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9)
-    shceduler = torch.optim.lr_scheduler.MultiStepLR(optim, [args.epoch // 2, args.epoch * 3 // 4], gamma=0.1)
+    optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=5e-4)
+    # scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, [args.epoch // 2, args.epoch * 3 // 4], gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=args.epoch)
 
     # loss_log
     valid_df = pd.DataFrame(columns=['time(seconds)', 'epoch', 'sum', 'reconstruct_mse', 'cross_entropy',
@@ -132,7 +133,7 @@ def main():
         loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{valid_loss_sum:.4f}\t{valid_loss_mse:.4f}\t{valid_loss_ce:.4f}\t{valid_accuracy * 100:.1f}           "
         print(loss_str)
 
-        shceduler.step()
+        scheduler.step()
 
     # save model
     torch.save(model.state_dict(), "../result/model/model.pt")
