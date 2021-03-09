@@ -63,6 +63,7 @@ def main():
     parser.add_argument("--data_num_of_imbalanced_class", type=int, default=2500)
     parser.add_argument("--coefficient_of_mse", type=float, default=1)
     parser.add_argument("--coefficient_of_ce", type=float, default=1)
+    parser.add_argument("--copy_imbalanced_class", action="store_true")
     args = parser.parse_args()
 
     # prepare data_loader
@@ -75,7 +76,7 @@ def main():
         [torchvision.transforms.ToTensor(),
          torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     data_dir = "../data"
-    trainset = Dataset(root=data_dir, transform=transform_augment, data_num_of_imbalanced_class=args.data_num_of_imbalanced_class)
+    trainset = Dataset(root=data_dir, transform=transform_augment, data_num_of_imbalanced_class=args.data_num_of_imbalanced_class, copy_imbalanced_class=args.copy_imbalanced_class)
     train_size = int(len(trainset) * 0.9)
     valid_size = len(trainset) - train_size
     trainset, validset = torch.utils.data.random_split(trainset, [train_size, valid_size])

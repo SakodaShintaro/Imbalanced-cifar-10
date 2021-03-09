@@ -4,7 +4,7 @@ import numpy as np
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, root, transform, data_num_of_imbalanced_class):
+    def __init__(self, root, transform, data_num_of_imbalanced_class, copy_imbalanced_class):
         self.cifar10 = torchvision.datasets.CIFAR10(root=root, train=True, download=True, transform=transform)
         self.data = self.cifar10.data
         self.targets = self.cifar10.targets
@@ -29,6 +29,26 @@ class Dataset(torch.utils.data.Dataset):
 
         self.data = self.data[mask]
         self.targets = self.targets[mask]
+
+        # copy imbalanced class
+        if copy_imbalanced_class:
+            imbalanced_class_indices = [(target in imbalanced_class_labels) for target in self.targets]
+            append_data = self.data[imbalanced_class_indices]
+            append_targets = self.targets[imbalanced_class_indices]
+            copy_num = (5000 // data_num_of_imbalanced_class) - 1
+            print(append_data.shape)
+            print(append_targets.shape)
+
+            append_data = np.tile(append_data, reps=(copy_num, 1, 1, 1))
+            append_targets = np.tile(append_targets, reps=(copy_num, ))
+            print(append_data.shape)
+            print(append_targets.shape)
+
+            self.data = np.concatenate([self.data, append_data], 0)
+            self.targets = np.concatenate([self.targets, append_targets], 0)
+            print(self.data.shape)
+            print(self.targets.shape)
+
 
     def __getitem__(self, index):
         data = self.data[index]
