@@ -7,7 +7,7 @@ import time
 import pandas as pd
 import matplotlib.pyplot as plt
 from PIL import Image
-from model import LinearModel, CNNModel
+from model import CNNModel
 from dataset import Dataset
 
 # define constants

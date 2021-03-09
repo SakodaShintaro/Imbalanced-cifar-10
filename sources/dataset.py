@@ -36,18 +36,12 @@ class Dataset(torch.utils.data.Dataset):
             append_data = self.data[imbalanced_class_indices]
             append_targets = self.targets[imbalanced_class_indices]
             copy_num = (5000 // data_num_of_imbalanced_class) - 1
-            print(append_data.shape)
-            print(append_targets.shape)
 
             append_data = np.tile(append_data, reps=(copy_num, 1, 1, 1))
             append_targets = np.tile(append_targets, reps=(copy_num, ))
-            print(append_data.shape)
-            print(append_targets.shape)
 
             self.data = np.concatenate([self.data, append_data], 0)
             self.targets = np.concatenate([self.targets, append_targets], 0)
-            print(self.data.shape)
-            print(self.targets.shape)
 
     def __getitem__(self, index):
         data = self.data[index]
