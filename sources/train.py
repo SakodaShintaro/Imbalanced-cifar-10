@@ -55,6 +55,15 @@ def calc_loss(model, data_loader, device, args):
     return loss_sum, loss_mse, loss_ce, accuracy, accuracy_for_each_class
 
 
+def mixup_data(x, y, alpha=1.0):
+    lam = np.random.beta(alpha, alpha) if alpha > 0 else 1
+    batch_size = x.size()[0]
+    index = torch.randperm(batch_size)
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hidden_size", type=int, default=2048)
@@ -67,6 +76,8 @@ def main():
     parser.add_argument("--coefficient_of_ce", type=float, default=1)
     parser.add_argument("--copy_imbalanced_class", action="store_true")
     parser.add_argument("--use_prioritized_dataset", action="store_true")
+    parser.add_argument("--use_mixup", action="store_true")
+    parser.add_argument("--mixup_alpha", type=float, default=1.0)
     args = parser.parse_args()
 
     # prepare data_loader
@@ -119,10 +130,20 @@ def main():
         model.train()
         for step, minibatch in enumerate(trainloader):
             x, y = minibatch
+            if args.use_mixup:
+                x, y_a, y_b, lam = mixup_data(x, y, alpha=args.mixup_alpha)
+                y_a, y_b = y_a.to(device), y_b.to(device)
             x, y = x.to(device), y.to(device)
             reconstruct, classify = model.forward(x)
             loss_mse = torch.nn.functional.mse_loss(reconstruct, x, reduction="none").mean([1, 2, 3])
-            loss_ce = torch.nn.functional.cross_entropy(classify, y, reduction="none")
+
+            if args.use_mixup:
+                loss_ce1 = torch.nn.functional.cross_entropy(classify, y_a, reduction="none")
+                loss_ce2 = torch.nn.functional.cross_entropy(classify, y_b, reduction="none")
+                loss_ce = lam * loss_ce1 + (1 - lam) * loss_ce2
+            else:
+                loss_ce = torch.nn.functional.cross_entropy(classify, y, reduction="none")
+
             loss_sum = args.coefficient_of_mse * loss_mse + args.coefficient_of_ce * loss_ce
 
             if args.use_prioritized_dataset:
