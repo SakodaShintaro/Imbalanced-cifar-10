@@ -4,6 +4,7 @@ import torch
 import torchvision
 import argparse
 import time
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -147,7 +148,8 @@ def main():
         s = pd.Series([elapsed, int(epoch + 1), valid_loss_sum, valid_loss_mse, valid_loss_ce,
                        valid_accuracy] + valid_accuracy_for_each_class, index=valid_df.columns)
         valid_df = valid_df.append(s, ignore_index=True)
-        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{valid_loss_sum:.4f}\t{valid_loss_mse:.4f}\t{valid_loss_ce:.4f}\t{valid_accuracy * 100:.1f}           "
+        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{valid_loss_sum:.4f}\t{valid_loss_mse:.4f}\t{valid_loss_ce:.4f}\t{valid_accuracy * 100:.1f}\t{np.mean(valid_accuracy_for_each_class) * 100:.1f}"
+        print(" " * 100, end="\r")
         print(loss_str)
 
         scheduler.step()
