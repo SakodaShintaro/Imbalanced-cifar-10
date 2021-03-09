@@ -49,7 +49,6 @@ class Dataset(torch.utils.data.Dataset):
             print(self.data.shape)
             print(self.targets.shape)
 
-
     def __getitem__(self, index):
         data = self.data[index]
         target = self.targets[index]
