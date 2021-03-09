@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from model import CNNModel
 from dataset import Dataset
+from prioritized_dataset import PrioritizedDataset, PrioritizedDataloader
 
 # define constants
 image_size = 32
@@ -64,6 +65,7 @@ def main():
     parser.add_argument("--coefficient_of_mse", type=float, default=1)
     parser.add_argument("--coefficient_of_ce", type=float, default=1)
     parser.add_argument("--copy_imbalanced_class", action="store_true")
+    parser.add_argument("--use_prioritized_dataset", action="store_true")
     args = parser.parse_args()
 
     # prepare data_loader
@@ -76,15 +78,23 @@ def main():
         [torchvision.transforms.ToTensor(),
          torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     data_dir = "../data"
-    trainset = Dataset(root=data_dir, transform=transform_augment, data_num_of_imbalanced_class=args.data_num_of_imbalanced_class, copy_imbalanced_class=args.copy_imbalanced_class)
+    trainset = Dataset(
+        root=data_dir,
+        transform=transform_augment,
+        data_num_of_imbalanced_class=args.data_num_of_imbalanced_class,
+        copy_imbalanced_class=args.copy_imbalanced_class)
     train_size = int(len(trainset) * 0.9)
     valid_size = len(trainset) - train_size
     trainset, validset = torch.utils.data.random_split(trainset, [train_size, valid_size])
     validset.transform = transform_normal
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=1)
     validloader = torch.utils.data.DataLoader(validset, batch_size=args.batch_size, shuffle=True, num_workers=2)
     testset = torchvision.datasets.CIFAR10(root=data_dir, train=False, download=True, transform=transform_normal)
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
+
+    if args.use_prioritized_dataset:
+        trainset = PrioritizedDataset(trainset)
+        trainloader = PrioritizedDataloader(trainset, batch_size=args.batch_size)
 
     # model
     model = CNNModel(image_size, image_channel, args.hidden_size, class_num)
@@ -110,9 +120,17 @@ def main():
             x, y = minibatch
             x, y = x.to(device), y.to(device)
             reconstruct, classify = model.forward(x)
-            loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
-            loss_ce = torch.nn.functional.cross_entropy(classify, y)
+            loss_mse = torch.nn.functional.mse_loss(reconstruct, x, reduction="none").mean([1, 2, 3])
+            loss_ce = torch.nn.functional.cross_entropy(classify, y, reduction="none")
             loss_sum = args.coefficient_of_mse * loss_mse + args.coefficient_of_ce * loss_ce
+
+            if args.use_prioritized_dataset:
+                trainset.update(loss_sum)
+
+            loss_mse = loss_mse.mean()
+            loss_ce = loss_ce.mean()
+            loss_sum = loss_sum.mean()
+
             _, predicted = torch.max(classify, 1)
             accuracy = (predicted == y).sum().item() / x.shape[0]
             elapsed = time.time() - start
