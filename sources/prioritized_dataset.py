@@ -27,8 +27,8 @@ class SegmentTree:
 
 class PrioritizedDataset(torch.utils.data.Dataset):
     def __init__(self, subset):
-        self.data = subset.dataset.data
-        self.targets = subset.dataset.targets
+        self.data = subset.dataset.data[subset.indices]
+        self.targets = subset.dataset.targets[subset.indices]
         self.targets = np.array(self.targets)
         self.transform = subset.dataset.transform
         self.segtree = SegmentTree(len(self.data))
