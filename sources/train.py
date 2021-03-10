@@ -99,7 +99,7 @@ def main():
     valid_size = len(trainset) - train_size
     trainset, validset = torch.utils.data.random_split(trainset, [train_size, valid_size])
     validset.transform = transform_normal
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=1)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
     validloader = torch.utils.data.DataLoader(validset, batch_size=args.batch_size, shuffle=True, num_workers=2)
     testset = torchvision.datasets.CIFAR10(root=data_dir, train=False, download=True, transform=transform_normal)
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
@@ -108,7 +108,7 @@ def main():
         trainset = PrioritizedDataset(trainset)
         trainloader = PrioritizedDataloader(trainset, batch_size=args.batch_size)
 
-    # model
+    # create model
     model = CNNModel(image_size, image_channel, args.hidden_size, class_num)
     if args.saved_model_path is not None:
         model.load_state_dict(torch.load(args.saved_model_path))
@@ -119,12 +119,13 @@ def main():
     optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=5e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=args.epoch)
 
-    # loss_log
+    # log
     valid_df = pd.DataFrame(columns=['time(seconds)', 'epoch', 'sum', 'reconstruct_mse', 'cross_entropy',
                                      'accuracy', "mean_accuracy"] + [f'accuracy_of_class{i}' for i in range(class_num)])
-
     start = time.time()
     best_accuracy = -float("inf")
+
+    # training step
     for epoch in range(args.epoch):
         # train
         model.train()
