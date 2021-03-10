@@ -122,9 +122,10 @@ def main():
 
     # loss_log
     valid_df = pd.DataFrame(columns=['time(seconds)', 'epoch', 'sum', 'reconstruct_mse', 'cross_entropy',
-                                     'accuracy'] + [f'accuracy_of_class{i}' for i in range(class_num)])
+                                     'accuracy', "mean_accuracy"] + [f'accuracy_of_class{i}' for i in range(class_num)])
 
     start = time.time()
+    best_accuracy = -float("inf")
     for epoch in range(args.epoch):
         # train
         model.train()
@@ -165,18 +166,23 @@ def main():
 
         # validation
         valid_loss_sum, valid_loss_mse, valid_loss_ce, valid_accuracy, valid_accuracy_for_each_class = calc_loss(model, validloader, device, args)
+        valid_mean_accuracy = np.mean(valid_accuracy_for_each_class)
         elapsed = time.time() - start
         s = pd.Series([elapsed, int(epoch + 1), valid_loss_sum, valid_loss_mse, valid_loss_ce,
-                       valid_accuracy] + valid_accuracy_for_each_class, index=valid_df.columns)
+                       valid_accuracy, valid_mean_accuracy] + valid_accuracy_for_each_class, index=valid_df.columns)
         valid_df = valid_df.append(s, ignore_index=True)
-        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{valid_loss_sum:.4f}\t{valid_loss_mse:.4f}\t{valid_loss_ce:.4f}\t{valid_accuracy * 100:.1f}\t{np.mean(valid_accuracy_for_each_class) * 100:.1f}"
+        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{valid_loss_sum:.4f}\t{valid_loss_mse:.4f}\t{valid_loss_ce:.4f}\t{valid_accuracy * 100:.1f}\t{valid_mean_accuracy * 100:.1f}"
         print(" " * 100, end="\r")
         print(loss_str)
 
+        if valid_mean_accuracy > best_accuracy:
+            best_accuracy = valid_mean_accuracy
+            torch.save(model.state_dict(), "../result/model/model.pt")
+
         scheduler.step()
 
-    # save model
-    torch.save(model.state_dict(), "../result/model/model.pt")
+    # load best model
+    model.load_state_dict(torch.load("../result/model/model.pt"))
 
     # save validation loss
     valid_df.to_csv("../result/loss_log/validation_loss.tsv", sep="\t")
