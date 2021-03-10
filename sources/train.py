@@ -67,7 +67,7 @@ def mixup_data(x, y, alpha=1.0):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hidden_size", type=int, default=2048)
-    parser.add_argument("--epoch", type=int, default=400)
+    parser.add_argument("--epoch", type=int, default=200)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--saved_model_path", type=str, default=None)
     parser.add_argument("--learning_rate", type=float, default=0.1)
@@ -117,7 +117,6 @@ def main():
 
     # optimizer
     optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=5e-4)
-    # scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, [args.epoch // 2, args.epoch * 3 // 4], gamma=0.1)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=args.epoch)
 
     # loss_log
