@@ -33,7 +33,7 @@ docker run --gpus all -it --name imbalanced-cifar-10-container imbalanced-cifar-
 ```
 
 ## Learn
-In the following, the command is described on the assumption that it will be executed in the `source` directory.
+In the following, the command is described on the assumption that it will be executed in the `sources` directory.
 
 #### Learning only a normal classifier for non-imbalanced data
 ```
@@ -49,3 +49,5 @@ In the following, the command is described on the assumption that it will be exe
 ```
 ./train.py --data_num_of_imbalanced_class=2500
 ```
+
+A script that performs all experiments under multiple conditions is prepared as `sources/experiment.sh`
