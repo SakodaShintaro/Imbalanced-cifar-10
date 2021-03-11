@@ -45,35 +45,36 @@ class ResidualBlock(nn.Module):
 class CNNModel(nn.Module):
     def __init__(self, input_size, input_channel_num, hidden_size, class_num):
         super(CNNModel, self).__init__()
+        down_sampling_num = 2
         down_channel_num = [128, 128]
-        self.conv1 = Conv2DwithBatchNorm(in_channels=input_channel_num, out_channels=down_channel_num[0], kernel_size=3)
-        self.conv2 = Conv2DwithBatchNorm(in_channels=down_channel_num[0], out_channels=down_channel_num[1], kernel_size=3)
 
-        self.blocks = nn.Sequential()
+        self.model = nn.Sequential()
+        for i in range(down_sampling_num):
+            self.model.add_module(
+                f"conv{i}",
+                Conv2DwithBatchNorm(
+                    in_channels=input_channel_num if i == 0 else down_channel_num[0],
+                    out_channels=down_channel_num[0],
+                    kernel_size=3))
+            self.model.add_module(f"relu{i}", nn.ReLU())
+            self.model.add_module(f"pool{i}", nn.MaxPool2d(2, 2))
+
         block_num = 4
         for i in range(block_num):
-            self.blocks.add_module(f"block{i}", ResidualBlock(down_channel_num[-1], kernel_size=3, reduction=8))
+            self.model.add_module(f"block{i}", ResidualBlock(down_channel_num[-1], kernel_size=3, reduction=8))
 
-        self.conv_classifier = nn.Conv2d(in_channels=down_channel_num[1], out_channels=down_channel_num[1], kernel_size=1, padding=0)
         representation_size = input_size // (len(down_channel_num) * 2)
-        self.linear_classifier = torch.nn.Linear(down_channel_num[1] * representation_size * representation_size, class_num)
-        self.pool = nn.MaxPool2d(2, 2)
+
+        self.model.add_module(
+            "classifier_conv",
+            nn.Conv2d(
+                in_channels=down_channel_num[1],
+                out_channels=down_channel_num[1],
+                kernel_size=1,
+                padding=0))
+        self.model.add_module("classifier_relu", nn.ReLU())
+        self.model.add_module("classifier_flatten", nn.Flatten(1))
+        self.model.add_module("classifier_linear", torch.nn.Linear(down_channel_num[1] * representation_size * representation_size, class_num))
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.pool(x)
-        x = self.conv2(x)
-        x = F.relu(x)
-        x = self.pool(x)
-
-        # Residual Block
-        x = self.blocks(x)
-
-        # classifier
-        x = self.conv_classifier(x)
-        x = F.relu(x)
-        x = torch.flatten(x, 1)
-        x = self.linear_classifier(x)
-
-        return x
+        return self.model(x)
