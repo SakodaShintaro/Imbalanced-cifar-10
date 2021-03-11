@@ -180,17 +180,10 @@ def main():
     plt.savefig('../result/loss_log/accuracy_for_each_class.png', bbox_inches="tight", pad_inches=0.05)
 
     # save test loss
-    with open("../result/loss_log/test_loss.txt", "w") as f:
-        test_loss, test_accuracy, test_accuracy_for_each_class = calc_loss(model, testloader, device)
-        f.write("loss\taccuracy")
-        for i in range(class_num):
-            f.write(f"\taccuracy_of_class{i}")
-        f.write("\n")
-
-        f.write(f"{test_loss:.4f}\t{test_accuracy * 100:.1f}")
-        for i in range(class_num):
-            f.write(f"\t{test_accuracy_for_each_class[i]}")
-        f.write("\n")
+    test_loss, test_accuracy, test_accuracy_for_each_class = calc_loss(model, testloader, device)
+    test_df = pd.DataFrame(data=[[test_loss, test_accuracy] + test_accuracy_for_each_class], 
+                           columns=['loss', 'accuracy'] + [f'accuracy_of_class{i}' for i in range(class_num)])
+    test_df.to_csv("../result/loss_log/test_loss.tsv", sep="\t")
 
 
 if __name__ == "__main__":
