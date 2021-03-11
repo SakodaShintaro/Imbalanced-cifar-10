@@ -103,6 +103,7 @@ def main():
         model.load_state_dict(torch.load(args.saved_model_path))
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
+    save_model_path = "../result/best_model.pt"
 
     # optimizer
     optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=5e-4)
@@ -161,12 +162,12 @@ def main():
 
         if valid_mean_accuracy > best_accuracy:
             best_accuracy = valid_mean_accuracy
-            torch.save(model.state_dict(), "../result/model/model.pt")
+            torch.save(model.state_dict(), save_model_path)
 
         scheduler.step()
 
     # load best model
-    model.load_state_dict(torch.load("../result/model/model.pt"))
+    model.load_state_dict(torch.load(save_model_path))
 
     # save validation loss
     valid_df.to_csv("../result/loss_log/validation_loss.tsv", sep="\t")
