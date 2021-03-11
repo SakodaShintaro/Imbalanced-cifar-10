@@ -57,7 +57,6 @@ def mixup_data(x, y, alpha=1.0):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--hidden_size", type=int, default=2048)
     parser.add_argument("--epoch", type=int, default=200)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--saved_model_path", type=str, default=None)
