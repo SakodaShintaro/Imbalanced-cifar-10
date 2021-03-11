@@ -62,7 +62,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--saved_model_path", type=str, default=None)
     parser.add_argument("--learning_rate", type=float, default=0.1)
-    parser.add_argument("--data_num_of_imbalanced_class", type=int, default=2500)
+    parser.add_argument("--data_num_of_imbalanced_class", type=int, default=5000)
     parser.add_argument("--copy_imbalanced_class", action="store_true")
     parser.add_argument("--use_prioritized_dataset", action="store_true")
     parser.add_argument("--use_mixup", action="store_true")
@@ -98,7 +98,7 @@ def main():
         trainloader = PrioritizedDataloader(trainset, batch_size=args.batch_size)
 
     # create model
-    model = CNNModel(image_size, image_channel, args.hidden_size, class_num)
+    model = CNNModel(image_size, image_channel)
     if args.saved_model_path is not None:
         model.load_state_dict(torch.load(args.saved_model_path))
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
