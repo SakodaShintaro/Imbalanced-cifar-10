@@ -74,20 +74,10 @@ class CNNModel(nn.Module):
         # Residual Block
         x = self.blocks(x)
 
-        # representation
-        if self.freeze_encoder:
-            x = x.detach()
-
-        # reconstruct
-        r = self.t_conv1(x)
-        r = F.relu(r)
-        r = self.t_conv2(r)
-        r = torch.tanh(r)
-
         # classifier
-        c = self.conv_classifier(x)
-        c = F.relu(c)
-        c = torch.flatten(c, 1)
-        c = self.linear_classifier(c)
+        x = self.conv_classifier(x)
+        x = F.relu(x)
+        x = torch.flatten(x, 1)
+        x = self.linear_classifier(x)
 
-        return r, c
+        return x

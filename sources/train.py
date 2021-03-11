@@ -7,7 +7,6 @@ import time
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from PIL import Image
 from model import CNNModel
 from dataset import Dataset
 from prioritized_dataset import PrioritizedDataset, PrioritizedDataloader
@@ -18,11 +17,9 @@ image_channel = 3
 class_num = 10
 
 
-def calc_loss(model, data_loader, device, args):
+def calc_loss(model, data_loader, device):
     with torch.no_grad():
-        loss_mse = 0
-        loss_ce = 0
-        loss_sum = 0
+        loss = 0
         accuracy = 0
         data_num = 0
         accuracy_for_each_class = [0 for _ in range(class_num)]
@@ -31,13 +28,9 @@ def calc_loss(model, data_loader, device, args):
         for minibatch in data_loader:
             x, y = minibatch
             x, y = x.to(device), y.to(device)
-            reconstruct, classify = model.forward(x)
-            curr_loss_mse = torch.nn.functional.mse_loss(reconstruct, x)
+            classify = model.forward(x)
             curr_loss_ce = torch.nn.functional.cross_entropy(classify, y)
-            curr_loss_sum = args.coefficient_of_mse * curr_loss_mse + args.coefficient_of_ce * curr_loss_ce
-            loss_mse += curr_loss_mse.item() * x.shape[0]
-            loss_ce += curr_loss_ce.item() * x.shape[0]
-            loss_sum += curr_loss_sum.item() * x.shape[0]
+            loss += curr_loss_ce.item() * x.shape[0]
             _, predicted = torch.max(classify, 1)
             accuracy += (predicted == y).sum().item()
 
@@ -46,13 +39,11 @@ def calc_loss(model, data_loader, device, args):
                 data_num_for_each_class[y[i]] += 1
 
         data_num = sum(data_num_for_each_class)
-        loss_mse /= data_num
-        loss_ce /= data_num
-        loss_sum /= data_num
+        loss /= data_num
         accuracy /= data_num
         for i in range(class_num):
             accuracy_for_each_class[i] /= data_num_for_each_class[i]
-    return loss_sum, loss_mse, loss_ce, accuracy, accuracy_for_each_class
+    return loss, accuracy, accuracy_for_each_class
 
 
 def mixup_data(x, y, alpha=1.0):
@@ -72,8 +63,6 @@ def main():
     parser.add_argument("--saved_model_path", type=str, default=None)
     parser.add_argument("--learning_rate", type=float, default=0.1)
     parser.add_argument("--data_num_of_imbalanced_class", type=int, default=2500)
-    parser.add_argument("--coefficient_of_mse", type=float, default=1)
-    parser.add_argument("--coefficient_of_ce", type=float, default=1)
     parser.add_argument("--copy_imbalanced_class", action="store_true")
     parser.add_argument("--use_prioritized_dataset", action="store_true")
     parser.add_argument("--use_mixup", action="store_true")
@@ -120,8 +109,8 @@ def main():
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=args.epoch)
 
     # log
-    valid_df = pd.DataFrame(columns=['time(seconds)', 'epoch', 'sum', 'reconstruct_mse', 'cross_entropy',
-                                     'accuracy', "mean_accuracy"] + [f'accuracy_of_class{i}' for i in range(class_num)])
+    valid_df = pd.DataFrame(columns=['time(seconds)', 'epoch', 'loss', 'accuracy', "mean_accuracy"] +
+                            [f'accuracy_of_class{i}' for i in range(class_num)])
     start = time.time()
     best_accuracy = -float("inf")
 
@@ -135,43 +124,38 @@ def main():
                 x, y_a, y_b, lam = mixup_data(x, y, alpha=args.mixup_alpha)
                 y_a, y_b = y_a.to(device), y_b.to(device)
             x, y = x.to(device), y.to(device)
-            reconstruct, classify = model.forward(x)
-            loss_mse = torch.nn.functional.mse_loss(reconstruct, x, reduction="none").mean([1, 2, 3])
+            classify = model.forward(x)
 
             if args.use_mixup:
-                loss_ce1 = torch.nn.functional.cross_entropy(classify, y_a, reduction="none")
-                loss_ce2 = torch.nn.functional.cross_entropy(classify, y_b, reduction="none")
-                loss_ce = lam * loss_ce1 + (1 - lam) * loss_ce2
+                loss1 = torch.nn.functional.cross_entropy(classify, y_a, reduction="none")
+                loss2 = torch.nn.functional.cross_entropy(classify, y_b, reduction="none")
+                loss = lam * loss1 + (1 - lam) * loss2
             else:
-                loss_ce = torch.nn.functional.cross_entropy(classify, y, reduction="none")
-
-            loss_sum = args.coefficient_of_mse * loss_mse + args.coefficient_of_ce * loss_ce
+                loss = torch.nn.functional.cross_entropy(classify, y, reduction="none")
 
             if args.use_prioritized_dataset:
-                trainset.update(loss_sum)
+                trainset.update(loss)
 
-            loss_mse = loss_mse.mean()
-            loss_ce = loss_ce.mean()
-            loss_sum = loss_sum.mean()
+            loss = loss.mean()
 
             _, predicted = torch.max(classify, 1)
             accuracy = (predicted == y).sum().item() / x.shape[0]
             elapsed = time.time() - start
-            loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{step + 1}\t{loss_sum:.4f}\t{loss_mse:.4f}\t{loss_ce:.4f}\t{accuracy * 100:.1f}"
+            loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{step + 1}\t{loss:.4f}\t{accuracy * 100:.1f}"
             print(loss_str, end="\r")
 
             optim.zero_grad()
-            loss_sum.backward()
+            loss.backward()
             optim.step()
 
         # validation
-        valid_loss_sum, valid_loss_mse, valid_loss_ce, valid_accuracy, valid_accuracy_for_each_class = calc_loss(model, validloader, device, args)
+        valid_loss, valid_accuracy, valid_accuracy_for_each_class = calc_loss(model, validloader, device)
         valid_mean_accuracy = np.mean(valid_accuracy_for_each_class)
         elapsed = time.time() - start
-        s = pd.Series([elapsed, int(epoch + 1), valid_loss_sum, valid_loss_mse, valid_loss_ce,
+        s = pd.Series([elapsed, int(epoch + 1), valid_loss,
                        valid_accuracy, valid_mean_accuracy] + valid_accuracy_for_each_class, index=valid_df.columns)
         valid_df = valid_df.append(s, ignore_index=True)
-        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{valid_loss_sum:.4f}\t{valid_loss_mse:.4f}\t{valid_loss_ce:.4f}\t{valid_accuracy * 100:.1f}\t{valid_mean_accuracy * 100:.1f}"
+        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{valid_loss:.4f}\t{valid_accuracy * 100:.1f}\t{valid_mean_accuracy * 100:.1f}"
         print(" " * 100, end="\r")
         print(loss_str)
 
@@ -188,7 +172,7 @@ def main():
     valid_df.to_csv("../result/loss_log/validation_loss.tsv", sep="\t")
 
     # plot validation loss
-    valid_df.plot(x="epoch", y=['sum', 'reconstruct_mse', 'cross_entropy', 'accuracy'], subplots=True, layout=(2, 2), marker=".", figsize=(16, 9))
+    valid_df.plot(x="epoch", y=['loss', 'accuracy'], subplots=True, layout=(2, 1), marker=".", figsize=(16, 9))
     plt.savefig('../result/loss_log/validation_loss.png', bbox_inches="tight", pad_inches=0.05)
     plt.clf()
     valid_df.plot(x="epoch", y=[f'accuracy_of_class{i}' for i in range(class_num)], marker=".", figsize=(16, 9))
@@ -196,46 +180,16 @@ def main():
 
     # save test loss
     with open("../result/loss_log/test_loss.txt", "w") as f:
-        test_loss_sum, test_loss_mse, test_loss_ce, test_accuracy, test_accuracy_for_each_class = calc_loss(model, testloader, device, args)
-        f.write("loss_sum\tloss_mse\tloss_ce\taccuracy")
+        test_loss, test_accuracy, test_accuracy_for_each_class = calc_loss(model, testloader, device)
+        f.write("loss\taccuracy")
         for i in range(class_num):
             f.write(f"\taccuracy_of_class{i}")
         f.write("\n")
 
-        f.write(f"{test_loss_sum:.4f}\t{test_loss_mse:.4f}\t{test_loss_ce:.4f}\t{test_accuracy * 100:.1f}")
+        f.write(f"{test_loss:.4f}\t{test_accuracy * 100:.1f}")
         for i in range(class_num):
             f.write(f"\t{test_accuracy_for_each_class[i]}")
         f.write("\n")
-
-    # show reconstruction
-    result_image_dir = "../result/image/"
-    with torch.no_grad():
-        model.eval()
-        for minibatch in testloader:
-            x, y = minibatch
-            x, y = x.to(device), y.to(device)
-            out, _ = model.forward(x)
-
-            x = (x + 1) / 2 * 256
-            x = x.to(torch.uint8)
-
-            out = (out + 1) / 2 * 256
-            out = out.to(torch.uint8)
-
-            for i in range(args.batch_size):
-                origin = x[i].reshape([image_channel, image_size, image_size])
-                origin = origin.permute([1, 2, 0])
-                origin = origin.cpu().numpy()
-
-                pred = out[i].reshape([image_channel, image_size, image_size])
-                pred = pred.permute([1, 2, 0])
-                pred = pred.cpu().numpy()
-
-                pil_img0 = Image.fromarray(origin)
-                pil_img0.save(f"{result_image_dir}/{i}-0.png")
-                pil_img1 = Image.fromarray(pred)
-                pil_img1.save(f"{result_image_dir}/{i}-1.png")
-            exit()
 
 
 if __name__ == "__main__":
