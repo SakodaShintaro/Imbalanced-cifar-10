@@ -54,9 +54,6 @@ class CNNModel(nn.Module):
         for i in range(block_num):
             self.blocks.add_module(f"block{i}", ResidualBlock(down_channel_num[-1], kernel_size=3, reduction=8))
 
-        self.t_conv1 = nn.ConvTranspose2d(in_channels=down_channel_num[1], out_channels=down_channel_num[0], kernel_size=2, stride=2)
-        self.t_conv2 = nn.ConvTranspose2d(in_channels=down_channel_num[0], out_channels=input_channel_num, kernel_size=2, stride=2)
-
         self.conv_classifier = nn.Conv2d(in_channels=down_channel_num[1], out_channels=down_channel_num[1], kernel_size=1, padding=0)
         representation_size = input_size // (len(down_channel_num) * 2)
         self.linear_classifier = torch.nn.Linear(down_channel_num[1] * representation_size * representation_size, class_num)
