@@ -103,15 +103,17 @@ def main():
         model.load_state_dict(torch.load(args.saved_model_path))
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
-    save_model_path = "../result/best_model.pt"
+
+    save_log_dir = "../result"
+    save_model_path = f"{save_log_dir}/best_model.pt"
 
     # optimizer
     optim = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=5e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=args.epoch)
 
     # log
-    valid_df = pd.DataFrame(columns=['time(seconds)', 'epoch', 'loss', 'accuracy', "mean_accuracy"] +
-                            [f'accuracy_of_class{i}' for i in range(class_num)])
+    valid_df = pd.DataFrame(columns=["time(seconds)", "epoch", "loss", "accuracy", "mean_accuracy"] +
+                            [f"accuracy_of_class{i}" for i in range(class_num)])
     start = time.time()
     best_accuracy = -float("inf")
 
@@ -170,20 +172,20 @@ def main():
     model.load_state_dict(torch.load(save_model_path))
 
     # save validation loss
-    valid_df.to_csv("../result/loss_log/validation_loss.tsv", sep="\t")
+    valid_df.to_csv(f"{save_log_dir}/valid_loss.tsv", sep="\t")
 
     # plot validation loss
-    valid_df.plot(x="epoch", y=['loss', 'accuracy'], subplots=True, layout=(2, 1), marker=".", figsize=(16, 9))
-    plt.savefig('../result/loss_log/validation_loss.png', bbox_inches="tight", pad_inches=0.05)
+    valid_df.plot(x="epoch", y=["loss", "accuracy"], subplots=True, layout=(2, 1), marker=".", figsize=(16, 9))
+    plt.savefig(f"{save_log_dir}/valid_loss.png", bbox_inches="tight", pad_inches=0.05)
     plt.clf()
-    valid_df.plot(x="epoch", y=[f'accuracy_of_class{i}' for i in range(class_num)], marker=".", figsize=(16, 9))
-    plt.savefig('../result/loss_log/accuracy_for_each_class.png', bbox_inches="tight", pad_inches=0.05)
+    valid_df.plot(x="epoch", y=[f"accuracy_of_class{i}" for i in range(class_num)], marker=".", figsize=(16, 9))
+    plt.savefig(f"{save_log_dir}/valid_accuracy_for_each_class.png", bbox_inches="tight", pad_inches=0.05)
 
     # save test loss
     test_loss, test_accuracy, test_accuracy_for_each_class = calc_loss(model, testloader, device)
-    test_df = pd.DataFrame(data=[[test_loss, test_accuracy] + test_accuracy_for_each_class], 
-                           columns=['loss', 'accuracy'] + [f'accuracy_of_class{i}' for i in range(class_num)])
-    test_df.to_csv("../result/loss_log/test_loss.tsv", sep="\t")
+    test_df = pd.DataFrame(data=[[test_loss, test_accuracy] + test_accuracy_for_each_class],
+                           columns=["loss", "accuracy"] + [f"accuracy_of_class{i}" for i in range(class_num)])
+    test_df.to_csv(f"{save_log_dir}/test_loss.tsv", sep="\t")
 
 
 if __name__ == "__main__":
