@@ -93,22 +93,29 @@ class InvertedResidual(nn.Module):
 class CNNModel(nn.Module):
     def __init__(self, input_size, input_channel_num, down_sampling_num=2, block_num=4, channel_num=128, class_num=10):
         super(CNNModel, self).__init__()
-        self.model = nn.Sequential()
+        self.encoder = nn.Sequential()
         for i in range(down_sampling_num):
-            self.model.add_module(f"conv{i}", Conv2DwithBatchNorm(input_channel_num if i == 0 else channel_num, channel_num, kernel_size=3))
-            self.model.add_module(f"relu{i}", nn.ReLU())
-            self.model.add_module(f"pool{i}", nn.MaxPool2d(2, 2))
+            self.encoder.add_module(f"conv{i}", Conv2DwithBatchNorm(input_channel_num if i == 0 else channel_num, channel_num, kernel_size=3))
+            self.encoder.add_module(f"relu{i}", nn.ReLU())
+            self.encoder.add_module(f"pool{i}", nn.MaxPool2d(2, 2))
 
         for i in range(block_num):
-            self.model.add_module(f"block{i}", ResidualBlock(channel_num, kernel_size=3, reduction=8))
-            # self.model.add_module(f"block{i}", InvertedResidual(channel_num, 1))
+            self.encoder.add_module(f"block{i}", ResidualBlock(channel_num, kernel_size=3, reduction=8))
+            # self.encoder.add_module(f"block{i}", InvertedResidual(channel_num, 1))
 
         representation_size = input_size // (down_sampling_num * 2)
+        self.classifier = nn.Sequential()
+        self.classifier.add_module("classifier_conv", nn.Conv2d(in_channels=channel_num, out_channels=channel_num, kernel_size=1, padding=0))
+        self.classifier.add_module("classifier_relu", nn.ReLU())
+        self.classifier.add_module("classifier_flatten", nn.Flatten(1))
+        self.classifier.add_module("classifier_linear", torch.nn.Linear(channel_num * representation_size * representation_size, class_num))
 
-        self.model.add_module("classifier_conv", nn.Conv2d(in_channels=channel_num, out_channels=channel_num, kernel_size=1, padding=0))
-        self.model.add_module("classifier_relu", nn.ReLU())
-        self.model.add_module("classifier_flatten", nn.Flatten(1))
-        self.model.add_module("classifier_linear", torch.nn.Linear(channel_num * representation_size * representation_size, class_num))
+    def encode(self, x):
+        return self.encoder(x)
+
+    def classify(self, x):
+        return self.classifier(x)
 
     def forward(self, x):
-        return self.model(x)
+        x = self.encoder(x)
+        return self.classifier(x)

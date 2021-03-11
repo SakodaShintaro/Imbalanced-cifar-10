@@ -46,15 +46,6 @@ def calc_loss(model, data_loader, device):
     return loss, accuracy, accuracy_for_each_class
 
 
-def mixup_data(x, y, alpha=1.0):
-    lam = np.random.beta(alpha, alpha) if alpha > 0 else 1
-    batch_size = x.size()[0]
-    index = torch.randperm(batch_size)
-    mixed_x = lam * x + (1 - lam) * x[index, :]
-    y_a, y_b = y, y[index]
-    return mixed_x, y_a, y_b, lam
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epoch", type=int, default=200)
@@ -122,17 +113,29 @@ def main():
         model.train()
         for step, minibatch in enumerate(trainloader):
             x, y = minibatch
-            if args.use_mixup:
-                x, y_a, y_b, lam = mixup_data(x, y, alpha=args.mixup_alpha)
-                y_a, y_b = y_a.to(device), y_b.to(device)
             x, y = x.to(device), y.to(device)
-            classify = model.forward(x)
 
             if args.use_mixup:
+                lam = np.random.beta(args.mixup_alpha, args.mixup_alpha) if args.mixup_alpha > 0 else 1
+                batch_size = x.size()[0]
+                index = torch.randperm(batch_size)
+
+                # case(1) mix input
+                mixed_x = lam * x + (1 - lam) * x[index, :]
+                classify = model.forward(mixed_x)
+
+                # case(2) mix representation
+                # representation = model.encode(x)
+                # mixed_representation = lam * representation + (1 - lam) * representation[index, :]
+                # classify = model.classifier(mixed_representation)
+
+                # mix loss
+                y_a, y_b = y, y[index]
                 loss1 = torch.nn.functional.cross_entropy(classify, y_a, reduction="none")
                 loss2 = torch.nn.functional.cross_entropy(classify, y_b, reduction="none")
                 loss = lam * loss1 + (1 - lam) * loss2
             else:
+                classify = model.forward(x)
                 loss = torch.nn.functional.cross_entropy(classify, y, reduction="none")
 
             if args.use_prioritized_dataset:
