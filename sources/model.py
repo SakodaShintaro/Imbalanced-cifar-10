@@ -4,9 +4,9 @@ import torch.nn.functional as F
 
 
 class Conv2DwithBatchNorm(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size):
+    def __init__(self, in_channels, out_channels, kernel_size, depthwise=False):
         super(Conv2DwithBatchNorm, self).__init__()
-        self.conv_ = nn.Conv2d(in_channels, out_channels, kernel_size, bias=False, padding=kernel_size // 2)
+        self.conv_ = nn.Conv2d(in_channels, out_channels, kernel_size, bias=False, padding=kernel_size // 2, groups=in_channels if depthwise else 1)
         self.norm_ = nn.BatchNorm2d(out_channels)
 
     def forward(self, x):
@@ -15,31 +15,79 @@ class Conv2DwithBatchNorm(nn.Module):
         return t
 
 
+class SqueezeExcite(nn.Module):
+    def __init__(self, in_chs, reduction=8):
+        super(SqueezeExcite, self).__init__()
+        reduced_chs = in_chs // reduction
+        self.conv_reduce = nn.Conv2d(in_chs, reduced_chs, 1, bias=True)
+        self.act1 = nn.ReLU(inplace=True)
+        self.conv_expand = nn.Conv2d(reduced_chs, in_chs, 1, bias=True)
+        self.gate_fn = nn.Sigmoid()
+
+    def forward(self, x):
+        x_se = x.mean((2, 3), keepdim=True)
+        x_se = self.conv_reduce(x_se)
+        x_se = self.act1(x_se)
+        x_se = self.conv_expand(x_se)
+        return x * self.gate_fn(x_se)
+
+
 class ResidualBlock(nn.Module):
     def __init__(self, channel_num, kernel_size, reduction):
         super(ResidualBlock, self).__init__()
         self.conv_and_norm0_ = Conv2DwithBatchNorm(channel_num, channel_num, kernel_size)
         self.conv_and_norm1_ = Conv2DwithBatchNorm(channel_num, channel_num, kernel_size)
-        self.linear0_ = nn.Linear(channel_num, channel_num // reduction, bias=False)
-        self.linear1_ = nn.Linear(channel_num // reduction, channel_num, bias=False)
+        self.se_module = SqueezeExcite(channel_num, reduction)
 
     def forward(self, x):
         t = x
         t = self.conv_and_norm0_.forward(t)
         t = F.relu(t)
         t = self.conv_and_norm1_.forward(t)
-
-        y = F.avg_pool2d(t, [t.shape[2], t.shape[3]])
-        y = y.view([-1, t.shape[1]])
-        y = self.linear0_.forward(y)
-        y = F.relu(y)
-        y = self.linear1_.forward(y)
-        y = torch.sigmoid(y)
-        y = y.view([-1, t.shape[1], 1, 1])
-        t = t * y
-
+        t = self.se_module(t)
         t = F.relu(x + t)
         return t
+
+
+class InvertedResidual(nn.Module):
+    def __init__(self, channel_num, exp_ratio=1):
+        super(InvertedResidual, self).__init__()
+        mid_chs = channel_num * exp_ratio
+
+        self.act = nn.ReLU(inplace=True)
+
+        # Point-wise expansion
+        self.conv_bn1 = Conv2DwithBatchNorm(channel_num, mid_chs, kernel_size=1)
+
+        # Depth-wise convolution
+        self.conv_bn2 = Conv2DwithBatchNorm(mid_chs, mid_chs, kernel_size=3, depthwise=True)
+
+        # Squeeze-and-excitation
+        self.se = SqueezeExcite(mid_chs)
+
+        # Point-wise linear projection
+        self.conv_bn3 = Conv2DwithBatchNorm(mid_chs, channel_num, kernel_size=1)
+
+    def forward(self, x):
+        residual = x
+
+        # Point-wise expansion
+        x = self.conv_bn1(x)
+        x = self.act(x)
+
+        # Depth-wise convolution
+        x = self.conv_bn2(x)
+        x = self.act(x)
+
+        # Squeeze-and-excitation
+        x = self.se(x)
+
+        # Point-wise linear projection
+        x = self.conv_bn3(x)
+
+        x += residual
+
+        return x
 
 
 class CNNModel(nn.Module):
@@ -53,6 +101,7 @@ class CNNModel(nn.Module):
 
         for i in range(block_num):
             self.model.add_module(f"block{i}", ResidualBlock(channel_num, kernel_size=3, reduction=8))
+            # self.model.add_module(f"block{i}", InvertedResidual(channel_num, 1))
 
         representation_size = input_size // (down_sampling_num * 2)
 
