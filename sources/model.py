@@ -43,7 +43,7 @@ class ResidualBlock(nn.Module):
 
 
 class CNNModel(nn.Module):
-    def __init__(self, input_size, input_channel_num, hidden_size, class_num, freeze_encoder=False):
+    def __init__(self, input_size, input_channel_num, hidden_size, class_num):
         super(CNNModel, self).__init__()
         down_channel_num = [128, 128]
         self.conv1 = Conv2DwithBatchNorm(in_channels=input_channel_num, out_channels=down_channel_num[0], kernel_size=3)
@@ -57,7 +57,6 @@ class CNNModel(nn.Module):
         self.conv_classifier = nn.Conv2d(in_channels=down_channel_num[1], out_channels=down_channel_num[1], kernel_size=1, padding=0)
         representation_size = input_size // (len(down_channel_num) * 2)
         self.linear_classifier = torch.nn.Linear(down_channel_num[1] * representation_size * representation_size, class_num)
-        self.freeze_encoder = freeze_encoder
         self.pool = nn.MaxPool2d(2, 2)
 
     def forward(self, x):
