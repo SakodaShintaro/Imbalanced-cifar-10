@@ -117,22 +117,21 @@ def main():
 
             if args.use_mixup:
                 lam = np.random.beta(args.mixup_alpha, args.mixup_alpha) if args.mixup_alpha > 0 else 1
-                batch_size = x.size()[0]
-                index = torch.randperm(batch_size)
+                x_r = torch.roll(x, 1, 0)
 
                 # case(1) mix input
-                mixed_x = lam * x + (1 - lam) * x[index, :]
+                mixed_x = lam * x + (1 - lam) * x_r
                 classify = model.forward(mixed_x)
 
                 # case(2) mix representation
                 # representation = model.encode(x)
-                # mixed_representation = lam * representation + (1 - lam) * representation[index, :]
+                # mixed_representation = lam * representation + (1 - lam) * torch.roll(representation, 1, 0)
                 # classify = model.classifier(mixed_representation)
 
                 # mix loss
-                y_a, y_b = y, y[index]
-                loss1 = torch.nn.functional.cross_entropy(classify, y_a, reduction="none")
-                loss2 = torch.nn.functional.cross_entropy(classify, y_b, reduction="none")
+                y_r = torch.roll(y, 1, 0)
+                loss1 = torch.nn.functional.cross_entropy(classify, y, reduction="none")
+                loss2 = torch.nn.functional.cross_entropy(classify, y_r, reduction="none")
                 loss = lam * loss1 + (1 - lam) * loss2
             else:
                 classify = model.forward(x)
