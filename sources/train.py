@@ -145,7 +145,7 @@ def main():
             _, predicted = torch.max(classify, 1)
             accuracy = (predicted == y).sum().item() / x.shape[0]
             elapsed = time.time() - start
-            loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{step + 1}\t{loss:.4f}\t{accuracy * 100:.1f}"
+            loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{step + 1}\t{loss:.4f}\t{accuracy * 100:5.1f}"
             print(loss_str, end="\r")
 
             optim.zero_grad()
@@ -159,7 +159,7 @@ def main():
         s = pd.Series([elapsed, int(epoch + 1), valid_loss,
                        valid_accuracy, valid_mean_accuracy] + valid_accuracy_for_each_class, index=valid_df.columns)
         valid_df = valid_df.append(s, ignore_index=True)
-        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{valid_loss:.4f}\t{valid_accuracy * 100:.1f}\t{valid_mean_accuracy * 100:.1f}"
+        loss_str = f"{elapsed:.1f}\t{epoch + 1}\t{valid_loss:.4f}\t{valid_accuracy * 100:5.1f}\t{valid_mean_accuracy * 100:5.1f}"
         print(" " * 100, end="\r")
         print(loss_str)
 
