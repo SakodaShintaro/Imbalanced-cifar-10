@@ -20,21 +20,21 @@ class PostProcessor(torch.nn.Module):
 
 class PerceiverImageReconstructModel(PerceiverModel):
     def __init__(self, image_channels, image_height, image_width):
-        config = PerceiverConfig(d_model=64, d_latents=80, num_self_attends_per_block=2)
+        config = PerceiverConfig(d_model=256, d_latents=160, num_self_attends_per_block=4)
         super().__init__(config)
         self.config = config
         self.input_preprocessor = PerceiverImagePreprocessor(
             config,
-            prep_type="conv1x1",
+            prep_type="conv",
             spatial_downsample=1,
-            in_channels=image_channels,
-            out_channels=config.d_model,
-            position_encoding_type="trainable",
-            concat_or_add_pos="add",
-            project_pos_dim=config.d_model,
-            trainable_position_encoding_kwargs=dict(
-                index_dims=image_height * image_width, num_channels=config.d_model
-            )
+            out_channels=126,
+            position_encoding_type="fourier",
+            fourier_position_encoding_kwargs=dict(
+                num_bands=32,
+                max_resolution=(image_height, image_width),
+                sine_only=False,
+                concat_pos=True,
+            ),
         )
         self.decoder = PerceiverBasicDecoder(
             config,
