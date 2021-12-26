@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from model import CNNModel
 from dataset import Dataset
 from prioritized_dataset import PrioritizedDataset, PrioritizedDataloader
+from model_perceiver import PerceiverRapperModel
 
 # define constants
 image_size = 32
@@ -88,7 +89,8 @@ def main():
         trainloader = PrioritizedDataloader(trainset, batch_size=args.batch_size)
 
     # create model
-    model = CNNModel(image_size, image_channel)
+    # model = CNNModel(image_size, image_channel)
+    model = PerceiverRapperModel(image_channel, image_size, image_size)
     if args.saved_model_path is not None:
         model.load_state_dict(torch.load(args.saved_model_path))
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
